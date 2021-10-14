@@ -49,8 +49,9 @@ class JcrState:
 class Jcr:
     def __init__(self, cars_at_A=0, cars_at_B=0):
         # consts
-        self.cost_rental = -10 # negative cost means profit
-        self.cost_move = 2
+        self.rental_reward_A = 10 # negative cost means profit
+        self.rental_reward_B = 10 # negative cost means profit
+        self.cost_move = -2
         self.rental_request_rate_A = 3  # orig: 3
         self.rental_request_rate_B = 4  # orig: 4
         self.return_rate_A = 1  # orig: 3
@@ -95,26 +96,38 @@ class Jcr:
         :param max_cap_at_location:
         :return:
         """
-
-        request_probs[cars_at_location] = request_probs[cars_at_location:].sum()
-        request_probs[cars_at_location+1:] = 0
-        if max_cap_at_location == cars_at_location:
+        # print(f"brownian here: cars at location: {cars_at_location}")
+        # 1. Rent cars (if possible)
+        # if we have no cars, no cars can be requested. hence the probabilities are set all to zero
+        if cars_at_location == 0:
+            request_probs = np.zeros(shape=request_probs.shape)
+        else:
+            # the requests exceeding capacity are maped to the max available.
+            # e.g. if 3 cars are available, the probabilities for more than 3 are mapped (summed) to three
+            # and the probs for 4+ are set to zero
+            request_probs[cars_at_location] = request_probs[cars_at_location:].sum()
+            request_probs[cars_at_location+1:] = 0
+        # 2. return cars (if possible)
+        # if the location is full, no cars will be returned
+        if  cars_at_location == max_cap_at_location:
             return_probs[0] = 1
             return_probs[1:] = 0
         else:
-            return_probs[max_cap_at_location-cars_at_location] = return_probs[max_cap_at_location-cars_at_location:].sum()
-            return_probs[max_cap_at_location-cars_at_location+1:] = 0
+            if cars_at_location != 0:
+                return_probs[max_cap_at_location-cars_at_location] = return_probs[max_cap_at_location-cars_at_location:].sum()
+                return_probs[max_cap_at_location-cars_at_location+1:] = 0
         move = dict()
-        reward = dict()
+        reward = 0
         for i, p_req in enumerate(request_probs):
             if p_req == 0:
                 continue
+            reward += p_req*i
             for j, p_ret in enumerate(return_probs):
                 if p_ret == 0:
                     continue
                 # logging.debug(f'old prob: {move.get(-i+j)}, new prob: {move.get(-i+j, 0) + p_req*p_ret}')
                 move[-i+j] = move.get(-i+j, 0) + p_req*p_ret
-                reward[-i+j] = reward.get(-i+j, 0) + (p_req*p_ret)*i*self.cost_rental
+
         for k, v in move.items():
             logging.info(f'{k}: {v}')
         return move, reward
@@ -159,12 +172,9 @@ class Jcr:
         for i_a, p_a in move_A.items():
             for i_b, p_b in move_B.items():
                 s_primes[(self.state.cars_at_A+i_a, self.state.cars_at_B+i_b)] = p_a*p_b
+        reward = reward_A*self.rental_reward_A+reward_B*self.rental_reward_B
 
-        for i_a, r_a in reward_A.items():
-            for i_b, r_b in reward_B.items():
-                weighted_rewards[(self.state.cars_at_A+i_a, self.state.cars_at_B+i_b)] = r_a+r_b
-
-        return s_primes, weighted_rewards
+        return s_primes, reward
 
     def rent_cars_heuristic(self):
         """
@@ -198,3 +208,23 @@ class Jcr:
                      f'parking {return_B} cars '
                      f'resulting in {self.state.cars_at_B} cars. '
                      f'Parking-limit: {self.max_cap_B}')
+
+
+    def move_in_the_night(self, n):
+        """
+        moves n cars from A to B, if negative, it means moving from B to A
+        it is done trough changing the state of the object
+        :return: Nothing
+        """
+        # check for feasibility of the move:
+        assert n < self.max_move, f"tried to move {n} cars where max movement is {self.max_move}"
+        assert self.state.cars_at_A - n >= 0, f"cant take away {n} cars from A, bc there are only {self.state.cars_at_A}"
+        assert self.state.cars_at_B + n >= 0, f"cant take away {n} cars from B, bc there are only {self.state.cars_at_B}"
+        # if all is legal, we execute the moves
+        self.state.cars_at_A = self.state.cars_at_A - n
+        self.state.cars_at_B = self.state.cars_at_B + n
+        # we only have 20 parking slots. If we put more, then cars will be removed from the game (lost)
+        if self.state.cars_at_A > self.max_cap_A:
+            self.state.cars_at_A = self.max_cap_A
+        if self.state.cars_at_B > self.max_cap_B:
+            self.state.cars_at_B = self.max_cap_B
