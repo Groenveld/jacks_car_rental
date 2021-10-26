@@ -11,6 +11,7 @@ import jacks_car_rental
 # the model parameters
 gamma = 0.9
 theta = 1e-4
+#
 
 if __name__ == '__main__':
     j = jacks_car_rental.Jcr()
