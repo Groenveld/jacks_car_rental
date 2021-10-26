@@ -26,7 +26,7 @@ if __name__ == '__main__':
         print(j.states[1, 0])
         print(j.states[1, 1])
         # print(f"round {i}: reward: {r}")
-        #j.return_cars()
+        j.return_cars()
         jacks_car_rental.to_draw(j.states, 20, 20)
 
     # print(j.states[(10,10)]) #
