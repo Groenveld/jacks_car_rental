@@ -19,7 +19,7 @@ def poisson(lambd, max_n, eps=1e-7):
             break
         else:
             res[i] = p
-    assert np.sum(res) == 1, "sum pf probs != 1"
+    assert np.isclose(np.sum(res), 1, atol=10*eps), f"sum pf probs != 1 {np.sum(res)}"
     return res
 
 
@@ -41,13 +41,41 @@ def plot_poissons(p1, p2):
 
 
 class JcrState:
-    def __init__(self, cars_at_A, cars_at_B):
+    def __init__(self, cars_at_A, cars_at_B, prob):
         self.cars_at_A = cars_at_A
         self.cars_at_B = cars_at_B
+        self.prob = prob
+
+class JcrStates:
+    def __init__(self, max_cap_a, max_cap_b, init_states=None):
+        if init_states:
+            self.states = init_states
+        else:
+            self.states = self.init_zero(max_cap_a, max_cap_b)
+
+    def init_zero(self, max_cap_a, max_cap_b):
+        self.states = []
+        for a in range(0, max_cap_a+1):
+            for b in range(0, max_cap_b + 1):
+                self.states.append(JcrState(a, b, 0.0))
+
+
+def to_print(d):
+    for s, p in d.items():
+        print(s, p)
+
+
+def to_draw(d, max_a, max_b):
+    A = np.zeros((max_a + 1, max_b + 1))
+    for s, p in d.items():
+        A[s[0], s[1]] = p
+    sns.heatmap(A)
+    plt.show()
+
 
 
 class Jcr:
-    def __init__(self, cars_at_A=0, cars_at_B=0):
+    def __init__(self, init_states=None):
         # consts
         self.rental_reward_A = 10 # negative cost means profit
         self.rental_reward_B = 10 # negative cost means profit
@@ -59,22 +87,29 @@ class Jcr:
         self.max_cap_A = 20
         self.max_cap_B = 20
         self.max_move = 5
-        # the state is defined as the amount of cars at A and B
-        self.state = JcrState(cars_at_A, cars_at_B)
         # calculate rental and return prob distribution once
         self.rental_request_probs_A = poisson(self.rental_request_rate_A, self.max_cap_A+1)
         self.rental_request_probs_B = poisson(self.rental_request_rate_B, self.max_cap_B+1)
         self.rental_return_probs_A = poisson(self.return_rate_A, self.max_cap_A+1)
         self.rental_return_probs_B = poisson(self.return_rate_B, self.max_cap_B+1)
-        # states of the game defined as tuple (cars_at_A, cars_at_B)
+        # states of the game defined as dict[cars_at_A, cars_at_B], probability)
+        # self.states = JcrStates(init_states, self.max_cap_A, self.max_cap_B)
+        self.states = self.init_states()
+        self.states_prime = self.init_states()
 
-    def get_all_possible_states(self):
-        states = []
-        for a in range(0, self.max_cap_A+1):
-            for b in range(0, self.max_cap_B + 1):
-                states.append(JcrState(a, b))
-        logging.info(f'all possible states: {states}')
+    def init_states(self, init_states_dict=None):
+        if init_states_dict:
+            return init_states_dict
+        else:
+            states = dict()
+            for i in range(0, self.max_cap_A+1):
+                for j in range(0, self.max_cap_B+1):
+                    states[(i, j)] = 0.0
         return states
+
+
+
+
 
     def get_possible_actions(self):
         possible_actions = []
@@ -86,6 +121,81 @@ class Jcr:
             possible_actions.append(-n)
         logging.info(f'Possible actions: {possible_actions}')
         return possible_actions
+
+    def rent_cars(self):
+        r_a = self.rent_1D(self.rental_request_probs_A, dim=0)
+        r_b = self.rent_1D(self.rental_request_probs_B, dim=1)
+        return r_a+r_b
+
+    def return_cars(self):
+        self.return_1D(self.rental_return_probs_A, dim=0)
+        self.return_1D(self.rental_return_probs_B, dim=1)
+
+    def return_1D(self, return_probs, dim):
+        self.states_prime = self.init_states()
+        for s, p in self.states.items():
+            if p == 0:
+                continue
+            if dim == 0:
+                if s[dim] == self.max_cap_A:
+                    self.states_prime[s] += p
+                else:
+                    return_probs[s[dim]] = return_probs[s[dim]:].sum()
+                    return_probs[s[dim] + 1:] = 0
+            else:
+                if s[dim] == self.max_cap_B:
+                    self.states_prime[s] += p
+                else:
+                    return_probs[s[dim]] = return_probs[s[dim]:].sum()
+                    return_probs[s[dim] + 1:] = 0
+
+            for i, r in enumerate(return_probs):
+                if dim == 0:
+                    if s[0]+i > self.max_cap_A:
+                        continue
+                    self.states_prime[s[0]+i, s[1]] += p*r
+                else:
+                    if s[1]+i > self.max_cap_B:
+                        continue
+                    self.states_prime[s[0], s[1]+i] += p*r
+
+            self.states = self.states_prime.copy()
+
+
+
+    def rent_1D(self, rental_probs, dim):
+        self.states_prime = self.init_states()
+        reward = 0
+        # go trough all the states
+        for s, p in self.states.items():
+            if p == 0:
+                continue
+            # else:
+                #print(s, p)
+            # go trough all the possible transitions in dimension A
+            if s[dim] == 0:
+                self.states_prime[s] += p
+                continue
+            else:
+                rental_probs[s[dim]] = rental_probs[s[dim]:].sum()
+                rental_probs[s[dim]+1:] = 0
+
+            for i, r in enumerate(rental_probs):
+                if dim == 0:
+                    if s[0]-i < 0:
+                        continue
+                    self.states_prime[s[0]-i, s[1]] += p*r
+                    reward += p*r*i*self.rental_reward_A
+                else:
+                    if s[1]-i < 0:
+                        continue
+                    self.states_prime[s[0], s[1]-i] += p*r
+                    reward += p*r*i*self.rental_reward_B
+
+            self.states = self.states_prime.copy()
+
+        return reward
+
 
 
     def brownian_1D(self, request_probs, return_probs, cars_at_location, max_cap_at_location):

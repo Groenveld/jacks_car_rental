@@ -13,39 +13,37 @@ gamma = 0.9
 theta = 1e-4
 
 if __name__ == '__main__':
-    j = jacks_car_rental.Jcr(20, 20)
-    print(j.state.cars_at_A)
-    print(j.state.cars_at_B)
-    # all_states = j.get_all_possible_states()
-    # print(j.rental_request_probs_A)
-    m, reward = j.brownian_movement()
-    x = range(0,20)
-    y = range(0,20)
-    A = np.zeros(shape=(21, 21))
-    R = np.zeros(shape=(21, 21))
-    for l, prob in m.items():
-        # print(loc[0], loc[1], prob)
-        A[l[0], l[1]] = prob
+    j = jacks_car_rental.Jcr()
+    print("INIT")
+    j.states[(2, 2)] = 1
 
-    # A = np.where(A>0.01, 1, 0)
-    # A = np.array([[0, 0, 0],[1, 1, 2]])
-    # sns.heatmap(A)
-    # plt.show()
-    print(A[9, 9])
-    print(A[10, 10])
-    print(f"reward: {reward}")
-    # for s in all_states:
-    # print(s.cars_at_A, s.cars_at_B)
+    print(sum(j.states.values()))
+    jacks_car_rental.to_draw(j.states, 20, 20)
+    for i in range(10):
+        r = j.rent_cars()
+        print(j.states[0, 0])
+        print(j.states[0, 1])
+        print(j.states[1, 0])
+        print(j.states[1, 1])
+        # print(f"round {i}: reward: {r}")
+        #j.return_cars()
+        jacks_car_rental.to_draw(j.states, 20, 20)
+
+    # print(j.states[(10,10)])
+    # print(j.rental_request_probs_A[0])
+    # print(j.rental_request_probs_B[0])
+
+
 
     # Initialization
     V = np.zeros(shape=(21, 21), dtype=float)
+    V_prime = V.copy()
     # init the policy. keep in mind that all actions of the policy need to be feasible
     policy = np.zeros(shape=(21, 21), dtype=int)
 
     # Policy evaluation
     delta = 0.0
     while True:
-
         # Policy Evaluation
         for i in range(0, 21):
             for j in range(0, 21):
@@ -55,24 +53,30 @@ if __name__ == '__main__':
                 # according to Bellman equation
                 # print(f"cars at A: {s.state.cars_at_A}, cars at B: {s.state.cars_at_B}")
                 state_primes, reward = s.brownian_movement()
+                if (i == 21) & (j == 21):
+                    pass
+                    print(sum(state_primes.values()))
+                new_contribution_sum = 0
                 for coord, prob in state_primes.items():
-                    V[i, j] += prob*gamma*V[coord[0], coord[1]]
-                V[i, j] += reward
+                    new_contribution = prob*gamma*V[coord[0], coord[1]]
+                    if (i == 20) & (j == 20):
+                       new_contribution_sum += new_contribution
+                    V_prime[i, j] += new_contribution
+                if (i == 20) & (j == 20):
+                    print(f"new_contribution_sum: {new_contribution_sum}")
+                V_prime[i, j] += reward
                 # delta = np.max(delta, np.abs(v-V[i,j]))
-                delta = max(delta, abs(v - V[i, j])) # np.max(delta, np.abs(v-V[i,j]))
-
+                delta = max(delta, abs(v - V_prime[i, j])) # np.max(delta, np.abs(v-V[i,j]))
+        V = V_prime
+        print(V[20, 20])
         # Exit condition for policy Evaluation
         print(f'delta: {delta}')
         if delta < theta:
             break
-
-
-
-        #sns.heatmap(V)
-        #plt.show()
-
+        sns.heatmap(V)
+        plt.show()
         #    break
-        #input("next step?")
+        input("next step?")
 
 
 
