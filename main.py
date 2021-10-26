@@ -29,7 +29,7 @@ if __name__ == '__main__':
         #j.return_cars()
         jacks_car_rental.to_draw(j.states, 20, 20)
 
-    # print(j.states[(10,10)])
+    # print(j.states[(10,10)]) #
     # print(j.rental_request_probs_A[0])
     # print(j.rental_request_probs_B[0])
 

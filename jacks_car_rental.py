@@ -134,7 +134,7 @@ class Jcr:
     def return_1D(self, return_probs, dim):
         self.states_prime = self.init_states()
         for s, p in self.states.items():
-            if p == 0:
+            if p == 0: #
                 continue
             if dim == 0:
                 if s[dim] == self.max_cap_A:
