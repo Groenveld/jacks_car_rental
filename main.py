@@ -16,7 +16,7 @@ theta = 1e-4
 if __name__ == '__main__':
     j = jacks_car_rental.Jcr()
     print("INIT")
-    j.states[(4, 4)] = 1
+    j.states[(4, 4)] = 0.8
 
     print(sum(j.states.values()))
     jacks_car_rental.to_draw(j.states, 20, 20)
