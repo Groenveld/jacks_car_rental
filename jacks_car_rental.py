@@ -72,6 +72,14 @@ def to_draw(d, max_a, max_b):
     sns.heatmap(A)
     plt.show()
 
+def get_center_of_mass(d):
+    mass_x = 0
+    mass_y = 0
+    for s, p in d.items():
+        mass_x += s[0]*p
+        mass_y += s[1]*p
+    return mass_x, mass_y
+
 
 
 class Jcr:
@@ -108,9 +116,6 @@ class Jcr:
         return states
 
 
-
-
-
     def get_possible_actions(self):
         possible_actions = []
         # a move of 3 means moving 3 cars from A to B
@@ -134,24 +139,25 @@ class Jcr:
     def return_1D(self, return_probs, dim):
         self.states_prime = self.init_states()
         for s, p in self.states.items():
-            if p == 0: #
+            if p == 0:
                 continue
             if dim == 0:
                 if s[dim] == self.max_cap_A:
                     self.states_prime[s] += p
                 else:
-                    return_probs[s[dim]] = return_probs[s[dim]:].sum()
-                    return_probs[s[dim] + 1:] = 0
+                    return_probs[self.max_cap_A-s[dim]] = return_probs[self.max_cap_A-s[dim]:].sum()
+                    return_probs[self.max_cap_A-s[dim] + 1:] = 0
             else:
                 if s[dim] == self.max_cap_B:
                     self.states_prime[s] += p
                 else:
-                    return_probs[s[dim]] = return_probs[s[dim]:].sum()
-                    return_probs[s[dim] + 1:] = 0
+                    return_probs[self.max_cap_B-s[dim]] = return_probs[self.max_cap_B-s[dim]:].sum()
+                    return_probs[self.max_cap_B-s[dim] + 1:] = 0
 
             for i, r in enumerate(return_probs):
                 if dim == 0:
                     if s[0]+i > self.max_cap_A:
+                        #print(f"this should be 0: {r}")
                         continue
                     self.states_prime[s[0]+i, s[1]] += p*r
                 else:

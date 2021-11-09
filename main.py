@@ -16,17 +16,14 @@ theta = 1e-4
 if __name__ == '__main__':
     j = jacks_car_rental.Jcr()
     print("INIT")
-    j.states[(2, 2)] = 1
+    j.states[(4, 4)] = 1
 
     print(sum(j.states.values()))
     jacks_car_rental.to_draw(j.states, 20, 20)
-    for i in range(10):
-        r = j.rent_cars()
-        print(j.states[0, 0])
-        print(j.states[0, 1])
-        print(j.states[1, 0])
-        print(j.states[1, 1])
+    for i in range(6):
+        # r = j.rent_cars()
         # print(f"round {i}: reward: {r}")
+        print(jacks_car_rental.get_center_of_mass(j.states))
         j.return_cars()
         jacks_car_rental.to_draw(j.states, 20, 20)
 
