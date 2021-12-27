@@ -89,7 +89,7 @@ class Jcr:
         self.rental_reward_B = 10 # negative cost means profit
         self.cost_move = -2
         self.rental_request_rate_A = 3  # orig: 3
-        self.rental_request_rate_B = 4  # orig: 4
+        self.rental_request_rate_B = 3  # orig: 4
         self.return_rate_A = 1  # orig: 3
         self.return_rate_B = 1  # orig: 2
         self.max_cap_A = 20
