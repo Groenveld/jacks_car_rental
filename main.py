@@ -6,26 +6,32 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import random
-import jacks_car_rental
-
+import jacks_car_rental as jcr
+import os
 # the model parameters
 gamma = 0.9
 theta = 1e-4
 #
 
 if __name__ == '__main__':
-    j = jacks_car_rental.Jcr()
-    print("INIT")
-    j.states[(4, 4)] = 1.0
+    j = jcr.Jcr()
+    jcr.plot_poissons(j.rental_request_probs_A, j.rental_request_probs_B)
 
+    print("INIT")
+    j.states[18, 18] = 1.0
+    for i in range(10):
+        print(f"center of mass: {j.get_center_of_mass()}")
+        j.to_draw()
+        j.rent_cars()
+    quit()
     print(sum(j.states.values()))
-    jacks_car_rental.to_draw(j.states, 20, 20)
+    jcr.to_draw(j.states, 20, 20)
     for i in range(6):
         # r = j.rent_cars()
         # print(f"round {i}: reward: {r}")
-        print(jacks_car_rental.get_center_of_mass(j.states))
+        print(jcr.get_center_of_mass(j.states))
         j.return_cars()
-        jacks_car_rental.to_draw(j.states, 20, 20)
+        jcr.to_draw(j.states, 20, 20)
 
     # print(j.states[(10,10)]) #
     # print(j.rental_request_probs_A[0])

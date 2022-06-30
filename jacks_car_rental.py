@@ -19,7 +19,9 @@ def poisson(lambd, max_n, eps=1e-7):
             break
         else:
             res[i] = p
-    assert np.isclose(np.sum(res), 1, atol=10*eps), f"sum pf probs != 1 {np.sum(res)}"
+    # assert np.isclose(np.sum(res), 1, atol=10*eps), f"sum of probs != 1 {np.sum(res)}"
+    if not np.isclose(np.sum(res), 1, atol=10*eps):
+        print(f"sum of probs is just: {np.sum(res)}")
     return res
 
 
@@ -40,45 +42,25 @@ def plot_poissons(p1, p2):
     plt.show()
 
 
-class JcrState:
-    def __init__(self, cars_at_A, cars_at_B, prob):
-        self.cars_at_A = cars_at_A
-        self.cars_at_B = cars_at_B
-        self.prob = prob
-
-class JcrStates:
-    def __init__(self, max_cap_a, max_cap_b, init_states=None):
-        if init_states:
-            self.states = init_states
+def wall_vector(vec, n):
+    """
+    when a vector of length e.g. 10 is passed and n is 5, the elements 6:10 will be added to element 5
+    the returning vec has length 5
+    :param vec: incoming vector
+    :param n: length of the returning vec
+    :return: vec with len n
+    """
+    assert n > 0, "walled vec must have len > 0"
+    walled_vec = np.zeros(n)
+    for i in range(len(vec)):
+        # print(i, vec[i])
+        if i < n:
+            walled_vec[i] = vec[i]
         else:
-            self.states = self.init_zero(max_cap_a, max_cap_b)
-
-    def init_zero(self, max_cap_a, max_cap_b):
-        self.states = []
-        for a in range(0, max_cap_a+1):
-            for b in range(0, max_cap_b + 1):
-                self.states.append(JcrState(a, b, 0.0))
-
-
-def to_print(d):
-    for s, p in d.items():
-        print(s, p)
-
-
-def to_draw(d, max_a, max_b):
-    A = np.zeros((max_a + 1, max_b + 1))
-    for s, p in d.items():
-        A[s[0], s[1]] = p
-    sns.heatmap(A)
-    plt.show()
-
-def get_center_of_mass(d):
-    mass_x = 0
-    mass_y = 0
-    for s, p in d.items():
-        mass_x += s[0]*p
-        mass_y += s[1]*p
-    return mass_x, mass_y
+            walled_vec[n-1] += vec[i]
+        # print(f'new walled: {walled_vec}')
+    assert np.isclose(sum(vec), np.sum(walled_vec), 1e-7), f"vec and walled vec sum is not the same: {np.sum(vec)} {np.sum(walled_vec)} {vec} {walled_vec}"
+    return walled_vec
 
 
 
@@ -88,8 +70,8 @@ class Jcr:
         self.rental_reward_A = 10 # negative cost means profit
         self.rental_reward_B = 10 # negative cost means profit
         self.cost_move = -2
-        self.rental_request_rate_A = 3  # orig: 3
-        self.rental_request_rate_B = 3  # orig: 4
+        self.rental_request_rate_A = 1  # orig: 3
+        self.rental_request_rate_B = 1  # orig: 4
         self.return_rate_A = 1  # orig: 3
         self.return_rate_B = 1  # orig: 2
         self.max_cap_A = 20
@@ -100,37 +82,60 @@ class Jcr:
         self.rental_request_probs_B = poisson(self.rental_request_rate_B, self.max_cap_B+1)
         self.rental_return_probs_A = poisson(self.return_rate_A, self.max_cap_A+1)
         self.rental_return_probs_B = poisson(self.return_rate_B, self.max_cap_B+1)
-        # states of the game defined as dict[cars_at_A, cars_at_B], probability)
-        # self.states = JcrStates(init_states, self.max_cap_A, self.max_cap_B)
-        self.states = self.init_states()
-        self.states_prime = self.init_states()
-
-    def init_states(self, init_states_dict=None):
-        if init_states_dict:
-            return init_states_dict
+        # states of the game defined as matrix of probabilities [cars_at_A, cars_at_B], probability)
+        if init_states:
+            self.states = init_states
         else:
-            states = dict()
-            for i in range(0, self.max_cap_A+1):
-                for j in range(0, self.max_cap_B+1):
-                    states[(i, j)] = 0.0
-        return states
+            self.states = self.init_zero_states()
+        self.states_prime = self.init_zero_states()
 
+    def to_draw(self):
+        sns.heatmap(self.states)
+        plt.show()
 
-    def get_possible_actions(self):
-        possible_actions = []
-        # a move of 3 means moving 3 cars from A to B
-        for n in range(0, min(self.state.cars_at_A, self.max_move)):
-            possible_actions.append(n)
-        # a move of -2 means moving 2 cars from B to A
-        for n in range(0, min(self.state.cars_at_B, self.max_move)):
-            possible_actions.append(-n)
-        logging.info(f'Possible actions: {possible_actions}')
-        return possible_actions
+    def get_center_of_mass(self):
+        """
+        returns the x,y position where the distribution would be in balance when sticking on a needle
+        """
+        mass_x = 0
+        mass_y = 0
+        dim_x, dim_y = self.states.shape
+        for i in range(dim_x):
+            for j in range(dim_y):
+                mass_x += self.states[i, j] * i
+                mass_y += self.states[i, j] * j
+        return mass_x, mass_y
+
+    def init_zero_states(self):
+        return np.zeros((self.max_cap_A, self.max_cap_B))
 
     def rent_cars(self):
-        r_a = self.rent_1D(self.rental_request_probs_A, dim=0)
-        r_b = self.rent_1D(self.rental_request_probs_B, dim=1)
-        return r_a+r_b
+        """
+        go trough states and apply the rental poisson. as we can not rent out more than we have, the wall_vector
+        function will limit the requests exceeding the stock to the stock available.
+        the parking can at max be empty, not negative
+        :return:
+        """
+        A_prime = np.zeros((self.max_cap_A, self.max_cap_B))
+        for i in range(self.states.shape[0]):
+            for j in range(self.states.shape[1]):
+                # print(f"i,j {i} {j}")
+                weight = self.states[i,j]
+                # create a transition matrix of probs ending up at (i, j), (i-1, j), (i, j-1), (i-1, j-1) and so on
+                # where -1 means renting one car
+                # this prob needs to be weighted by the prob of the actual state A[i,j]
+                p_i = np.flip(wall_vector(self.rental_request_probs_A, i + 1))
+                p_j = np.flip(wall_vector(self.rental_request_probs_B, j + 1))
+                p1 = p_i.reshape(1,-1)
+                p2 = p_j.reshape(-1,1)
+                # print("coord: ", i, j, "probs: ", p_i, p_j, "matrix affected: \n", A_to_be_altered)
+                A_prime[0:i+1, 0:j+1] += weight*((p2@p1).T)
+                print(i, j, len(p_i), len(p_j), (p2@p1).shape)
+                # print(f"shape of p1: {p1.shape} p1: {p1}")
+                # print(f"shape of p2: {p2.shape} p2: {p2}")
+                # A_prime = p2@p1
+        self.states = A_prime
+        print(f"sum after renting: {A_prime.sum()}")
 
     def return_cars(self):
         self.return_1D(self.rental_return_probs_A, dim=0)
@@ -248,6 +253,16 @@ class Jcr:
             logging.info(f'{k}: {v}')
         return move, reward
 
+    def get_possible_actions(self):
+        possible_actions = []
+        # a move of 3 means moving 3 cars from A to B
+        for n in range(0, min(self.state.cars_at_A, self.max_move)):
+            possible_actions.append(n)
+        # a move of -2 means moving 2 cars from B to A
+        for n in range(0, min(self.state.cars_at_B, self.max_move)):
+            possible_actions.append(-n)
+        logging.info(f'Possible actions: {possible_actions}')
+        return possible_actions
     def brownian_movement(self):
         """
         there are some fluctuations during the day.
