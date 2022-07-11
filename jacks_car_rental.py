@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
-import math
+import helper_math as hm
 
 logging.basicConfig(filename='jcr_app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -13,24 +13,27 @@ class Jcr:
         self.rental_reward_A = 10 # negative cost means profit
         self.rental_reward_B = 10 # negative cost means profit
         self.cost_move = -2
-        self.rental_request_rate_A = 1  # orig: 3
-        self.rental_request_rate_B = 1  # orig: 4
+        self.rental_request_rate_A = 3  # orig: 3
+        self.rental_request_rate_B = 4  # orig: 4
         self.return_rate_A = 1  # orig: 3
         self.return_rate_B = 1  # orig: 2
         self.max_cap_A = 20
         self.max_cap_B = 20
         self.max_move = 5
         # calculate rental and return prob distribution once
-        self.rental_request_probs_A = poisson(self.rental_request_rate_A, self.max_cap_A+1)
-        self.rental_request_probs_B = poisson(self.rental_request_rate_B, self.max_cap_B+1)
-        self.rental_return_probs_A = poisson(self.return_rate_A, self.max_cap_A+1)
-        self.rental_return_probs_B = poisson(self.return_rate_B, self.max_cap_B+1)
+        self.rental_request_probs_A = hm.poisson(self.rental_request_rate_A, self.max_cap_A+1)
+        self.rental_request_probs_B = hm.poisson(self.rental_request_rate_B, self.max_cap_B+1)
+        self.rental_return_probs_A = hm.poisson(self.return_rate_A, self.max_cap_A+1)
+        self.rental_return_probs_B = hm.poisson(self.return_rate_B, self.max_cap_B+1)
         # states of the game defined as matrix of probabilities [cars_at_A, cars_at_B], probability)
         if init_states:
             self.states = init_states
         else:
             self.states = self.init_zero_states()
         self.states_prime = self.init_zero_states()
+
+    def init_zero_states(self):
+        return np.zeros((self.max_cap_A, self.max_cap_B))
 
     def to_draw(self):
         sns.heatmap(self.states)
@@ -49,8 +52,7 @@ class Jcr:
                 mass_y += self.states[i, j] * j
         return mass_x, mass_y
 
-    def init_zero_states(self):
-        return np.zeros((self.max_cap_A, self.max_cap_B))
+
 
     def rent_cars(self):
         """
@@ -67,8 +69,8 @@ class Jcr:
                 # create a transition matrix of probs ending up at (i, j), (i-1, j), (i, j-1), (i-1, j-1) and so on
                 # where -1 means renting one car
                 # this prob needs to be weighted by the prob of the actual state A[i,j]
-                p_i = np.flip(wall_vector(self.rental_request_probs_A, i + 1))
-                p_j = np.flip(wall_vector(self.rental_request_probs_B, j + 1))
+                p_i = np.flip(hm.wall_vector(self.rental_request_probs_A, i + 1))
+                p_j = np.flip(hm.wall_vector(self.rental_request_probs_B, j + 1))
                 p1 = p_i.reshape(1,-1)
                 p2 = p_j.reshape(-1,1)
                 # print("coord: ", i, j, "probs: ", p_i, p_j, "matrix affected: \n", A_to_be_altered)

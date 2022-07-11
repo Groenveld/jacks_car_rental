@@ -7,6 +7,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import random
 import jacks_car_rental as jcr
+import helper_math as hm
 import os
 # the model parameters
 gamma = 0.9
@@ -15,7 +16,6 @@ theta = 1e-4
 
 if __name__ == '__main__':
     j = jcr.Jcr()
-    jcr.plot_poissons(j.rental_request_probs_A, j.rental_request_probs_B)
 
     print("INIT")
     j.states[18, 18] = 1.0
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         for i in range(0, 21):
             for j in range(0, 21):
                 v = V[i, j]
-                s = jacks_car_rental.Jcr(i, j)
+                s = jcr.Jcr(i, j)
                 s.move_in_the_night(policy[i, j])
                 # according to Bellman equation
                 # print(f"cars at A: {s.state.cars_at_A}, cars at B: {s.state.cars_at_B}")

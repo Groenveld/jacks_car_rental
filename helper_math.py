@@ -15,8 +15,8 @@ def poisson(lambd, n, eps=1e-7):
     :return:        Array of poisson probs where p(k) = p[k]
     """
     res = np.zeros(n)
-    if lambd == 0:
-        return res
+    assert lambd>0, "requirement for poisson: lambda>0"
+
     for i, n in enumerate(range(0, n)):
         p = np.power(lambd, n)/math.factorial(n)*np.exp(-lambd)
         # we want nonnegative probabilities. p might get negative for too big n bc of limited float capabilities
@@ -33,6 +33,7 @@ def poisson(lambd, n, eps=1e-7):
 
 
 def plot_poissons(p1, p2):
+    absolute_tolerance = 1e-6
     f, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
     # poisson 1
     ax1.plot(p1, label=f'lambda=3')
@@ -40,9 +41,10 @@ def plot_poissons(p1, p2):
     ax1.set_title('poisson')
     ax1.legend()
     # poisson 2
-    ax2.plot(np.cumsum(p1))
-    ax2.plot(np.cumsum(p2))
-    ax2.set_title('cumsum of poisson')
+    ax2.plot(np.log10(1-np.cumsum(p1)))
+    ax2.plot(np.log10(1-np.cumsum(p2)))
+    ax2.hlines(y=math.log10(absolute_tolerance), xmin=0, xmax=20, colors='r')
+    ax2.set_title('log(1 - cumsum of poisson)')
     ax2.set_xticks(range(0, len(p1)))
     ax2.set_xticklabels([str(n) for n in range(0, len(p1))])
     # show plot
@@ -71,7 +73,7 @@ def make_prob_matrix(lambda_x, lambda_y, shape):
     # create a walled row vector
     p_y = wall_vector(poisson(lambd=lambda_y, n=20), shape[1]).reshape(shape[1], -1)
     # create the walled matrix
-    return p_x@p_y
+    return p_y@p_x
 
 def make_prob_matrix_dict(lambda_x, lambda_y, max_shape):
     d = dict()
