@@ -14,7 +14,7 @@ class Jcr:
         self.rental_reward_B = 10 # negative cost means profit
         self.cost_move = -2
         self.rental_request_rate_A = 3  # orig: 3
-        self.rental_request_rate_B = 4  # orig: 4
+        self.rental_request_rate_B = 1  # orig: 4
         self.return_rate_A = 1  # orig: 3
         self.return_rate_B = 1  # orig: 2
         self.max_cap_A = 20
@@ -33,7 +33,7 @@ class Jcr:
         self.states_prime = self.init_zero_states()
 
     def init_zero_states(self):
-        return np.zeros((self.max_cap_A, self.max_cap_B))
+        return np.zeros((self.max_cap_A+1, self.max_cap_B+1))
 
     def to_draw(self):
         sns.heatmap(self.states)
@@ -61,13 +61,14 @@ class Jcr:
         the parking can at max be empty, not negative
         :return:
         """
-        A_prime = np.zeros((self.max_cap_A, self.max_cap_B))
+        A_prime = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
         for i in range(self.states.shape[0]):
             for j in range(self.states.shape[1]):
                 # print(f"i,j {i} {j}")
                 weight = self.states[i,j]
-                # create a transition matrix of probs ending up at (i, j), (i-1, j), (i, j-1), (i-1, j-1) and so on
-                # where -1 means renting one car
+                # create a transition matrix of probs that 1, 2, .. n cars in A and 1, 2, .. n cars in B are rented
+                # this will move the state from (i, j) -> (i*, j*) where i* = i-n and j* = j-n
+                # example: (7, 8) -> (6, 6) means we rented 1 car from A and 2 from B
                 # this prob needs to be weighted by the prob of the actual state A[i,j]
                 p_i = np.flip(hm.wall_vector(self.rental_request_probs_A, i + 1))
                 p_j = np.flip(hm.wall_vector(self.rental_request_probs_B, j + 1))
@@ -75,11 +76,12 @@ class Jcr:
                 p2 = p_j.reshape(-1,1)
                 # print("coord: ", i, j, "probs: ", p_i, p_j, "matrix affected: \n", A_to_be_altered)
                 A_prime[0:i+1, 0:j+1] += weight*((p2@p1).T)
-                print(i, j, len(p_i), len(p_j), (p2@p1).shape)
+                #print(i, j, len(p_i), len(p_j), (p2@p1).shape)
                 # print(f"shape of p1: {p1.shape} p1: {p1}")
                 # print(f"shape of p2: {p2.shape} p2: {p2}")
                 # A_prime = p2@p1
         self.states = A_prime
+        # print(self.get_center_of_mass())
         print(f"sum after renting: {A_prime.sum()}")
 
     def return_cars(self):

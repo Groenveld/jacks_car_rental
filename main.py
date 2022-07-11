@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
     print("INIT")
     j.states[18, 18] = 1.0
-    for i in range(10):
+    for i in range(6):
         print(f"center of mass: {j.get_center_of_mass()}")
         j.to_draw()
         j.rent_cars()
