@@ -18,11 +18,15 @@ if __name__ == '__main__':
     j = jcr.Jcr()
 
     print("INIT")
-    j.states[18, 18] = 1.0
-    for i in range(6):
+    j.S[18, 18] = 1.0
+    for i in range(1):
         print(f"center of mass: {j.get_center_of_mass()}")
         j.to_draw()
-        j.rent_cars()
+        A, reward = j.rent_cars(18,18)
+        j.to_draw_something(A)
+        print(f"the reward is: {reward}")
+        B = j.return_cars(A)
+        j.to_draw_something(B)
     quit()
     print(sum(j.states.values()))
     jcr.to_draw(j.states, 20, 20)
