@@ -2,111 +2,48 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
-import math
+import helper_math as hm
 
 logging.basicConfig(filename='jcr_app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-def poisson(lambd, n, eps=1e-7):
-    """
-    Returns a vector of poisson distributed probabilities
-    :param lambd:
-    :param n:       Length of array to be returned
-    :param eps:     minimum value of a probability, if less, it gathers the sum of all the following probs as well
-    :return:        Array of poisson probs where p(k) = p[k]
-    """
-    res = np.zeros(n)
-    if lambd == 0:
-        return res
-    for i, n in enumerate(range(0, n)):
-        p = np.power(lambd, n)/math.factorial(n)*np.exp(-lambd)
-        # we want nonnegative probabilities. p might get negative for too big n bc of limited float capabilities
-        assert p > 0, "probability must be non-negative -> get bigger epsilon to avoid this error"
-        if p > eps:
-            res[i] = p
-        else:
-            res[i] = 1-np.sum(res)
-            break
-    # assert np.isclose(np.sum(res), 1, atol=10*eps), f"sum of probs != 1 {np.sum(res)}"
-    if not np.isclose(np.sum(res), 1, atol=10*eps):
-        print(f"sum of probs is just: {np.sum(res)}")
-    return res
-
-
-def plot_poissons(p1, p2):
-    f, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-    # poisson 1
-    ax1.plot(p1, label=f'lambda=3')
-    ax1.plot(p2, label=f'lambda=4')
-    ax1.set_title('poisson')
-    ax1.legend()
-    # poisson 2
-    ax2.plot(np.cumsum(p1))
-    ax2.plot(np.cumsum(p2))
-    ax2.set_title('cumsum of poisson')
-    ax2.set_xticks(range(0, len(p1)))
-    ax2.set_xticklabels([str(n) for n in range(0, len(p1))])
-    # show plot
-    plt.show()
-
-
-def wall_vector(vec, n):
-    """
-    when a vector of length e.g. 10 is passed and n is 5, the elements 6:10 will be added to element 5
-    the returning vec has length 5
-    :param vec: incoming vector
-    :param n: length of the returning vec
-    :return: vec with len n
-    """
-    assert n > 0, "walled vec must have len > 0"
-    assert n <= len(vec), f"walled vec of len {n} must be smaller than original vector of {len(vec)}"
-    walled_vec = np.zeros(n)
-    walled_vec[0:n-1] = vec[0:n-1]
-    walled_vec[-1] = np.sum(vec[n-1:])
-    assert np.isclose(sum(vec), np.sum(walled_vec), 1e-7), f"vec and walled vec sum is not the same: {np.sum(vec)} {np.sum(walled_vec)} {vec} {walled_vec}"
-    return walled_vec
-
-def make_prob_matrix(lambda_x, lambda_y, shape):
-    # create a walled column vector
-    p_x = wall_vector(poisson(lambd=lambda_x, n=20), shape[0]).reshape(-1, shape[0])
-    # create a walled row vector
-    p_y = wall_vector(poisson(lambd=lambda_y, n=20), shape[1]).reshape(shape[1], -1)
-    # create the walled matrix
-    return p_x@p_y
-
-def make_prob_matrix_dict(lambda_x, lambda_y, max_shape):
-    d = dict()
-    for x in range(1, max_shape[0]+1):
-        for y in range(1, max_shape[1]+1):
-            d[(x,y)] = make_prob_matrix(lambda_x, lambda_y, (x, y))
-    return d
 
 class Jcr:
-    def __init__(self, init_states=None):
+    def __init__(self, init_S=None):
         # consts
+        self.gamma = 0.9
         self.rental_reward_A = 10 # negative cost means profit
         self.rental_reward_B = 10 # negative cost means profit
         self.cost_move = -2
-        self.rental_request_rate_A = 1  # orig: 3
-        self.rental_request_rate_B = 1  # orig: 4
+        self.rental_request_rate_A = 5  # orig: 3
+        self.rental_request_rate_B = 5  # orig: 4
         self.return_rate_A = 1  # orig: 3
         self.return_rate_B = 1  # orig: 2
         self.max_cap_A = 20
         self.max_cap_B = 20
         self.max_move = 5
         # calculate rental and return prob distribution once
-        self.rental_request_probs_A = poisson(self.rental_request_rate_A, self.max_cap_A+1)
-        self.rental_request_probs_B = poisson(self.rental_request_rate_B, self.max_cap_B+1)
-        self.rental_return_probs_A = poisson(self.return_rate_A, self.max_cap_A+1)
-        self.rental_return_probs_B = poisson(self.return_rate_B, self.max_cap_B+1)
-        # states of the game defined as matrix of probabilities [cars_at_A, cars_at_B], probability)
-        if init_states:
-            self.states = init_states
+        self.rental_request_probs_A = hm.poisson(self.rental_request_rate_A, self.max_cap_A+1)
+        self.rental_request_probs_B = hm.poisson(self.rental_request_rate_B, self.max_cap_B+1)
+        self.rental_return_probs_A = hm.poisson(self.return_rate_A, self.max_cap_A+1)
+        self.rental_return_probs_B = hm.poisson(self.return_rate_B, self.max_cap_B+1)
+        # S of the game defined as matrix of probabilities [cars_at_A, cars_at_B], probability)
+        if init_S:
+            self.S = init_S
         else:
-            self.states = self.init_zero_states()
-        self.states_prime = self.init_zero_states()
+            self.S = self.init_zero_S()
+        self.S_prime = self.init_zero_S()
+        self.V = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
+        self.P = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
+
+    def init_zero_S(self):
+        return np.zeros((self.max_cap_A+1, self.max_cap_B+1))
 
     def to_draw(self):
-        sns.heatmap(self.states)
+        sns.heatmap(self.S)
+        plt.show()
+
+    def to_draw_something(self, A):
+        sns.heatmap(A)
         plt.show()
 
     def get_center_of_mass(self):
@@ -115,93 +52,76 @@ class Jcr:
         """
         mass_x = 0
         mass_y = 0
-        dim_x, dim_y = self.states.shape
+        dim_x, dim_y = self.S.shape
         for i in range(dim_x):
             for j in range(dim_y):
-                mass_x += self.states[i, j] * i
-                mass_y += self.states[i, j] * j
-        return mass_x, mass_y
+                mass_x += self.S[i, j] * i
+                mass_y += self.S[i, j] * j
+        return np.array([mass_x, mass_y])
 
-    def init_zero_states(self):
-        return np.zeros((self.max_cap_A, self.max_cap_B))
+    def rent_cars(self, i, j):
+        walled_a = hm.wall_vector(self.rental_request_probs_A, i + 1)
+        walled_b = hm.wall_vector(self.rental_request_probs_B, j + 1)
+        reward = np.arange(len(walled_a))*walled_a + np.arange(len(walled_b))*walled_b
+        # get probabilities of going somewhere
+        p_a = np.flip(walled_a).reshape(-1, 1)
+        p_b = np.flip(walled_b).reshape(1, -1)
+        # print("coord: ", i, j, "probs: ", p_i, p_j, "matrix affected: \n", A_to_be_altered)
+        S_after_rent = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
+        S_after_rent[0:(i + 1), 0:(j + 1)] += (p_a @ p_b).T
+        return S_after_rent, reward
 
-    def rent_cars(self):
+    def return_cars(self, A):
+        A_prime = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
+        for i in range(A.shape[0]):
+            for j in range(A.shape[1]):
+                walled_a = hm.wall_vector(self.rental_return_probs_A, A.shape[0] - i + 1)
+                walled_b = hm.wall_vector(self.rental_return_probs_B, A.shape[1] -j + 1)
+                A_prime += A[i,j]*(walled_a.reshape(-1,1)@walled_b.reshape(1,-1)).T
+        return A_prime
+
+
+    def policy_evaluation(self):
         """
-        go trough states and apply the rental poisson. as we can not rent out more than we have, the wall_vector
+        go trough S and apply the rental poisson. as we can not rent out more than we have, the wall_vector
         function will limit the requests exceeding the stock to the stock available.
         the parking can at max be empty, not negative
         :return:
         """
-        A_prime = np.zeros((self.max_cap_A, self.max_cap_B))
-        for i in range(self.states.shape[0]):
-            for j in range(self.states.shape[1]):
-                # print(f"i,j {i} {j}")
-                weight = self.states[i,j]
-                # create a transition matrix of probs ending up at (i, j), (i-1, j), (i, j-1), (i-1, j-1) and so on
-                # where -1 means renting one car
-                # this prob needs to be weighted by the prob of the actual state A[i,j]
-                p_i = np.flip(wall_vector(self.rental_request_probs_A, i + 1))
-                p_j = np.flip(wall_vector(self.rental_request_probs_B, j + 1))
-                p1 = p_i.reshape(1,-1)
-                p2 = p_j.reshape(-1,1)
-                # print("coord: ", i, j, "probs: ", p_i, p_j, "matrix affected: \n", A_to_be_altered)
-                A_prime[0:i+1, 0:j+1] += weight*((p2@p1).T)
-                print(i, j, len(p_i), len(p_j), (p2@p1).shape)
-                # print(f"shape of p1: {p1.shape} p1: {p1}")
-                # print(f"shape of p2: {p2.shape} p2: {p2}")
-                # A_prime = p2@p1
-        self.states = A_prime
-        print(f"sum after renting: {A_prime.sum()}")
+        print(f"called policy evaluation")
+        # value_s = self.get_center_of_mass()
+        assert self.S.shape == (self.max_cap_A+1, self.max_cap_B+1)
+        delta = 0
+        while True:
+            for i in range(self.S.shape[0]):
+                for j in range(self.S.shape[1]):
+                    v = self.V[i,j]
+                    S_after_rent, reward = self.rent_cars(i, j)
+                    S_after_return = self.return_cars(S_after_rent)
+                    self.V[i,j] = reward + self.gamma*np.multiply(S_after_return, self.V)
+                    delta = np.max(delta, np.abs(v-self.V[i, j]))
+            if delta < 1e-6:
+                return
 
-    def return_cars(self):
-        self.return_1D(self.rental_return_probs_A, dim=0)
-        self.return_1D(self.rental_return_probs_B, dim=1)
-
-    def return_1D(self, return_probs, dim):
-        self.states_prime = self.init_states()
-        for s, p in self.states.items():
-            if p == 0:
-                continue
-            if dim == 0:
-                if s[dim] == self.max_cap_A:
-                    self.states_prime[s] += p
-                else:
-                    return_probs[self.max_cap_A-s[dim]] = return_probs[self.max_cap_A-s[dim]:].sum()
-                    return_probs[self.max_cap_A-s[dim] + 1:] = 0
-            else:
-                if s[dim] == self.max_cap_B:
-                    self.states_prime[s] += p
-                else:
-                    return_probs[self.max_cap_B-s[dim]] = return_probs[self.max_cap_B-s[dim]:].sum()
-                    return_probs[self.max_cap_B-s[dim] + 1:] = 0
-
-            for i, r in enumerate(return_probs):
-                if dim == 0:
-                    if s[0]+i > self.max_cap_A:
-                        #print(f"this should be 0: {r}")
-                        continue
-                    self.states_prime[s[0]+i, s[1]] += p*r
-                else:
-                    if s[1]+i > self.max_cap_B:
-                        continue
-                    self.states_prime[s[0], s[1]+i] += p*r
-
-            self.states = self.states_prime.copy()
+        value_s_prime = self.get_center_of_mass()
+        print(f"reward: {value_s_prime-value_s}")
+        # print(self.get_center_of_mass())
+        # print(f"sum after renting: {A_prime.sum()}")
 
 
 
     def rent_1D(self, rental_probs, dim):
-        self.states_prime = self.init_states()
+        self.S_prime = self.init_S()
         reward = 0
-        # go trough all the states
-        for s, p in self.states.items():
+        # go trough all the S
+        for s, p in self.S.items():
             if p == 0:
                 continue
             # else:
                 #print(s, p)
             # go trough all the possible transitions in dimension A
             if s[dim] == 0:
-                self.states_prime[s] += p
+                self.S_prime[s] += p
                 continue
             else:
                 rental_probs[s[dim]] = rental_probs[s[dim]:].sum()
@@ -211,15 +131,15 @@ class Jcr:
                 if dim == 0:
                     if s[0]-i < 0:
                         continue
-                    self.states_prime[s[0]-i, s[1]] += p*r
+                    self.S_prime[s[0]-i, s[1]] += p*r
                     reward += p*r*i*self.rental_reward_A
                 else:
                     if s[1]-i < 0:
                         continue
-                    self.states_prime[s[0], s[1]-i] += p*r
+                    self.S_prime[s[0], s[1]-i] += p*r
                     reward += p*r*i*self.rental_reward_B
 
-            self.states = self.states_prime.copy()
+            self.S = self.S_prime.copy()
 
         return reward
 
