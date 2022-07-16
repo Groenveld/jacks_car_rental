@@ -27,6 +27,8 @@ if __name__ == '__main__':
         print(f"the reward is: {reward}")
         B = j.return_cars(A)
         j.to_draw_something(B)
+        C = j.apply_policy(B)
+        j.to_draw_something(C)
     quit()
     print(sum(j.states.values()))
     jcr.to_draw(j.states, 20, 20)
