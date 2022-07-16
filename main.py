@@ -19,16 +19,30 @@ if __name__ == '__main__':
 
     print("INIT")
     j.S[18, 18] = 1.0
+    print(f"center of mass after init: {jcr.get_center_of_mass(j.S)}")
+
     for i in range(1):
-        print(f"center of mass: {j.get_center_of_mass()}")
+        jcr.to_draw_something(j.V)
+        j.policy_evaluation()
+        jcr.to_draw_something(j.V)
+        print(f"center of mass after policy evaluation: {jcr.get_center_of_mass(j.S)}")
+    quit()
+
+    for i in range(1):
         j.to_draw()
         A, reward = j.rent_cars(18,18)
-        j.to_draw_something(A)
+        print(f"center of mass after renting: {jcr.get_center_of_mass(A)}")
+        jcr.to_draw_something(A)
         print(f"the reward is: {reward}")
         B = j.return_cars(A)
-        j.to_draw_something(B)
+        print(f"center of mass after returning: {jcr.get_center_of_mass(B)}")
+        jcr.to_draw_something(B)
         C = j.apply_policy(B)
-        j.to_draw_something(C)
+        print(f"center of mass after policy: {jcr.get_center_of_mass(C)}")
+        jcr.to_draw_something(C)
+        jcr.to_draw_something(j.V)
+
+
     quit()
     print(sum(j.states.values()))
     jcr.to_draw(j.states, 20, 20)
