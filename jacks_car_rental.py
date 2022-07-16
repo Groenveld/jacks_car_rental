@@ -1,3 +1,4 @@
+import numpy
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -14,8 +15,8 @@ class Jcr:
         self.rental_reward_A = 10 # negative cost means profit
         self.rental_reward_B = 10 # negative cost means profit
         self.cost_move = -2
-        self.rental_request_rate_A = 5  # orig: 3
-        self.rental_request_rate_B = 5  # orig: 4
+        self.rental_request_rate_A = 3  # orig: 3
+        self.rental_request_rate_B = 4  # orig: 4
         self.return_rate_A = 1  # orig: 3
         self.return_rate_B = 1  # orig: 2
         self.max_cap_A = 20
@@ -33,7 +34,7 @@ class Jcr:
             self.S = self.init_zero_S()
         self.S_prime = self.init_zero_S()
         self.V = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
-        self.P = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
+        self.P = np.zeros((self.max_cap_A+1, self.max_cap_B+1), dtype=numpy.int)-10
 
     def init_zero_S(self):
         return np.zeros((self.max_cap_A+1, self.max_cap_B+1))
@@ -61,8 +62,10 @@ class Jcr:
 
     def rent_cars(self, i, j):
         walled_a = hm.wall_vector(self.rental_request_probs_A, i + 1)
+        print(walled_a)
         walled_b = hm.wall_vector(self.rental_request_probs_B, j + 1)
-        reward = np.arange(len(walled_a))*walled_a + np.arange(len(walled_b))*walled_b
+        reward = (self.rental_reward_A*np.sum(np.arange(len(walled_a))*walled_a) +
+                self.rental_reward_B*np.sum(np.arange(len(walled_b))*walled_b))
         # get probabilities of going somewhere
         p_a = np.flip(walled_a).reshape(-1, 1)
         p_b = np.flip(walled_b).reshape(1, -1)
@@ -72,13 +75,39 @@ class Jcr:
         return S_after_rent, reward
 
     def return_cars(self, A):
-        A_prime = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
+        S_after_return = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
         for i in range(A.shape[0]):
             for j in range(A.shape[1]):
-                walled_a = hm.wall_vector(self.rental_return_probs_A, A.shape[0] - i + 1)
-                walled_b = hm.wall_vector(self.rental_return_probs_B, A.shape[1] -j + 1)
-                A_prime += A[i,j]*(walled_a.reshape(-1,1)@walled_b.reshape(1,-1)).T
-        return A_prime
+                walled_a = hm.wall_vector(self.rental_return_probs_A, A.shape[0] - i)
+                walled_b = hm.wall_vector(self.rental_return_probs_B, A.shape[1] - j)
+                S_after_return[i:,j:] += A[i,j]*(walled_a.reshape(-1,1)@walled_b.reshape(1,-1))
+
+        return S_after_return
+
+    def apply_policy(self, A):
+        S_after_policy = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
+        print(f"shape of S_after_policy:  {S_after_policy.shape}")
+
+        for i in range(A.shape[0]):
+            for j in range(A.shape[1]):
+                p = self.P[i,j]
+                # p might be positive or negative
+                # check that i+p doesnt exceed 20 or gets below 0
+                print(f"policy for coord {i,j} is {p}")
+                print(f"the shape of input matrix: {A.shape}")
+                print(f"i+p= {i+p}")
+                print(f"j-p= {j-p}")
+                print(f"{min(i+p, A.shape[0]-1)}")
+                print(f"{max(j-p, 0)}")
+
+                # print(i + p, A.shape[0], np.min(i+p, A.shape[0]))
+                # print(i - p, 0, np.min(i-p, 0))
+                if p >= 0:
+                    S_after_policy[min(i+p, A.shape[0]-1), max(j-p, 0)] += A[i, j]
+                else:
+                    S_after_policy[max(i+p, 0), min(j-p, A.shape[1]-1)] += A[i, j]
+        return S_after_policy
+
 
 
     def policy_evaluation(self):
