@@ -8,7 +8,6 @@ import helper_math as hm
 logging.basicConfig(filename='jcr_app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
-
 def get_center_of_mass(A):
     """
     returns the x,y position where the distribution would be in balance when sticking on a needle
@@ -30,7 +29,7 @@ def to_draw_something(A):
 
 class Jcr:
     def __init__(self, init_S=None):
-        print(f"initializing class")
+        logging.info(f"initializing class")
         # consts
         self.gamma = 0.9
         self.rental_reward_A = 10
@@ -136,9 +135,10 @@ class Jcr:
         print(f"called policy evaluation")
         # value_s = self.get_center_of_mass()
         assert self.S.shape == (self.max_cap_A + 1, self.max_cap_B + 1)
-        delta = 0
         to_draw_something(self.V)
+        sweep = 0
         while True:
+            delta = 0
             print(f"delta: {delta}")
             for i in range(self.S.shape[0]):
                 for j in range(self.S.shape[1]):
@@ -154,10 +154,13 @@ class Jcr:
                     # print(self.V[i, j])
                     # print(i,j, reward, self.V[i, j])
                     delta = max(delta, np.abs(v - self.V[i, j]))
+                    # logging.info(delta)
+            logging.info(f"sweep: \t {sweep} \t delta: {delta}")
+            print('*', end='')
+            sweep += 1
+            if delta < 6:
                 to_draw_something(self.V)
-                print(delta)
-            if delta < 1e-6:
-                return
+                quit(0)
 
         value_s_prime = get_center_of_mass()
         print(f"reward: {value_s_prime - value_s}")

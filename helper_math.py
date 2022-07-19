@@ -59,12 +59,12 @@ def wall_vector(vec, n):
     :param n: length of the returning vec
     :return: vec with len n
     """
-    assert n > 0, "walled vec must have len > 0"
-    assert n <= len(vec), f"walled vec of len {n} must be smaller than original vector of {len(vec)}"
+    # assert n > 0, "walled vec must have len > 0"
+    # assert n <= len(vec), f"walled vec of len {n} must be smaller than original vector of {len(vec)}"
     walled_vec = np.zeros(n)
     walled_vec[0:n-1] = vec[0:n-1]
     walled_vec[-1] = np.sum(vec[n-1:])
-    assert np.isclose(sum(vec), np.sum(walled_vec), 1e-7), f"vec and walled vec sum is not the same: {np.sum(vec)} {np.sum(walled_vec)} {vec} {walled_vec}"
+    # assert np.isclose(sum(vec), np.sum(walled_vec), 1e-7), f"vec and walled vec sum is not the same: {np.sum(vec)} {np.sum(walled_vec)} {vec} {walled_vec}"
     return walled_vec
 
 def make_prob_matrix(lambda_x, lambda_y, shape):
