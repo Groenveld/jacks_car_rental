@@ -22,9 +22,9 @@ if __name__ == '__main__':
     print(f"center of mass after init: {jcr.get_center_of_mass(j.S)}")
 
     for i in range(1):
-        jcr.to_draw_something(j.V)
+        # jcr.to_draw_something(j.V)
         j.policy_evaluation()
-        jcr.to_draw_something(j.V)
+        # jcr.to_draw_something(j.V)
         print(f"center of mass after policy evaluation: {jcr.get_center_of_mass(j.S)}")
     quit()
 

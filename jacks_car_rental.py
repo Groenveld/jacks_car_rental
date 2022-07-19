@@ -5,7 +5,8 @@ import seaborn as sns
 import logging
 import helper_math as hm
 
-logging.basicConfig(filename='jcr_app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(filename='jcr_app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
 
 
 def get_center_of_mass(A):
@@ -32,33 +33,39 @@ class Jcr:
         print(f"initializing class")
         # consts
         self.gamma = 0.9
-        self.rental_reward_A = 1 # negative cost means profit
-        self.rental_reward_B = 1 # negative cost means profit
+        self.rental_reward_A = 10
+        self.rental_reward_B = 10
         self.cost_move = -2
-        self.rental_request_rate_A = 3  # orig: 3
-        self.rental_request_rate_B = 4  # orig: 4
-        self.return_rate_A = 3  # orig: 3
-        self.return_rate_B = 2  # orig: 2
+        self.rental_request_rate_A = 2  # orig: 3
+        self.rental_request_rate_B = 2  # orig: 4
+        self.return_rate_A = 0.00001  # orig: 3
+        self.return_rate_B = 1  # orig: 2
         self.max_cap_A = 20
         self.max_cap_B = 20
         self.max_move = 5
         # calculate rental and return prob distribution once
-        self.rental_request_probs_A = hm.poisson(self.rental_request_rate_A, self.max_cap_A+1)
-        self.rental_request_probs_B = hm.poisson(self.rental_request_rate_B, self.max_cap_B+1)
-        self.rental_return_probs_A = hm.poisson(self.return_rate_A, self.max_cap_A+1)
-        self.rental_return_probs_B = hm.poisson(self.return_rate_B, self.max_cap_B+1)
+        self.rental_request_probs_A = hm.poisson(self.rental_request_rate_A, self.max_cap_A + 1)
+        self.rental_request_probs_B = hm.poisson(self.rental_request_rate_B, self.max_cap_B + 1)
+        self.rental_return_probs_A = hm.poisson(self.return_rate_A, self.max_cap_A + 1)
+        self.rental_return_probs_B = hm.poisson(self.return_rate_B, self.max_cap_B + 1)
         # S of the game defined as matrix of probabilities [cars_at_A, cars_at_B], probability)
         if init_S:
             self.S = init_S
         else:
-            self.S = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
+            self.S = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
             print(self.S.shape)
         self.S_prime = self.init_zero_S()
-        self.V = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
-        self.P = np.zeros((self.max_cap_A+1, self.max_cap_B+1), dtype=numpy.int)-1
+        self.V = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
+        self.P = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1), dtype=numpy.int)
+        self.check_init_policies()
+
+    def check_init_policies(self):
+        for i in range(self.S.shape[0]):
+            for j in range(self.S.shape[1]):
+                assert self.is_feasible_action(i, j, self.P[i, j]), f"action not feasible: {i, j, self.P[i, j]}"
 
     def init_zero_S(self):
-        return np.zeros((self.max_cap_A+1, self.max_cap_B+1))
+        return np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
 
     def to_draw(self):
         sns.heatmap(self.S)
@@ -67,8 +74,8 @@ class Jcr:
     def rent_cars(self, i, j):
         walled_a = hm.wall_vector(self.rental_request_probs_A, i + 1)
         walled_b = hm.wall_vector(self.rental_request_probs_B, j + 1)
-        reward = (self.rental_reward_A*np.sum(np.arange(len(walled_a))*walled_a) +
-                self.rental_reward_B*np.sum(np.arange(len(walled_b))*walled_b))
+        reward = (self.rental_reward_A * np.sum(np.arange(len(walled_a)) * walled_a) +
+                  self.rental_reward_B * np.sum(np.arange(len(walled_b)) * walled_b))
         # get probabilities of going somewhere
         p_a = np.flip(walled_a).reshape(-1, 1)
         p_b = np.flip(walled_b).reshape(1, -1)
@@ -83,26 +90,41 @@ class Jcr:
             for j in range(A.shape[1]):
                 walled_a = hm.wall_vector(self.rental_return_probs_A, A.shape[0] - i)
                 walled_b = hm.wall_vector(self.rental_return_probs_B, A.shape[1] - j)
-                S_after_return[i:,j:] += A[i,j]*(walled_a.reshape(-1, 1)@walled_b.reshape(1, -1))
-
+                S_after_return[i:, j:] += A[i, j] * (walled_a.reshape(-1, 1) @ walled_b.reshape(1, -1))
         return S_after_return
 
-    def apply_policy(self, A):
-        S_after_policy = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
-        # print(f"shape of S_after_policy:  {S_after_policy.shape}")
+    def is_feasible_action2(self, i, j, a):
+        # we compare the
+        if a >= 0:
+            vec1 = np.array([a, a, a])
+            vec2 = np.array([i, self.max_cap_B - j, self.max_move])
+            return np.min(np.minimum(vec1, vec2))
+        else:
+            vec1 = np.array([-a, -a, -a])
+            vec2 = np.array([j, self.max_cap_A - i, self.max_move])
+            return np.min(np.minimum(vec1, vec2))
 
-        for i in range(A.shape[0]):
-            for j in range(A.shape[1]):
-                p = self.P[i, j]
-                # p might be positive or negative
-                # check that i+p doesnt exceed 20 or gets below 0
-                if p >= 0:
-                    S_after_policy[min(i+p, A.shape[0]-1), max(j-p, 0)] += A[i, j]
-                else:
-                    S_after_policy[max(i+p, 0), min(j-p, A.shape[1]-1)] += A[i, j]
-        return S_after_policy
+    def is_feasible_action(self, i, j, a):
+        if np.abs(a) > self.max_move:
+            return False
+        if i - a < 0 or i - a > self.max_cap_A:
+            return False
+        if j + a < 0 or j + a > self.max_cap_B:
+            return False
+        return True
 
+    def get_feasible_actions(self, i, j):
+        # TODO dont append lists but calc min and max and create range(min, max)
+        feasible_actions = []
+        for a in np.array(-self.max_move, self.max_move + 1):
+            if self.is_feasible_action(i, j, a):
+                feasible_actions.append(a)
+        return feasible_actions
 
+    def apply_policy(self, i, j):
+        a = self.P[i, j]
+        cost = self.cost_move * a
+        return i - a, j + a, cost
 
     def policy_evaluation(self):
         """
@@ -113,24 +135,31 @@ class Jcr:
         """
         print(f"called policy evaluation")
         # value_s = self.get_center_of_mass()
-        assert self.S.shape == (self.max_cap_A+1, self.max_cap_B+1)
+        assert self.S.shape == (self.max_cap_A + 1, self.max_cap_B + 1)
         delta = 0
+        to_draw_something(self.V)
         while True:
             print(f"delta: {delta}")
             for i in range(self.S.shape[0]):
                 for j in range(self.S.shape[1]):
                     v = self.V[i, j]
-                    S_after_rent, reward = self.rent_cars(i, j)
-                    print(i,j, reward)
+                    # print(i, j, v)
+                    i_moved, j_moved, cost = self.apply_policy(i, j)
+                    # print(i_moved, j_moved, cost)
+                    S_after_rent, reward = self.rent_cars(i_moved, j_moved)
+                    # to_draw_something(S_after_rent)
                     S_after_return = self.return_cars(S_after_rent)
-                    S_after_policy = self.apply_policy(S_after_return)
-                    self.V[i, j] = reward + self.gamma*np.sum(np.multiply(S_after_policy, self.V))
-                    delta = max(delta, np.abs(v-self.V[i, j]))
+                    # to_draw_something(S_after_return)
+                    self.V[i, j] = reward - cost + self.gamma * np.sum(np.multiply(S_after_return, self.V))
+                    # print(self.V[i, j])
+                    # print(i,j, reward, self.V[i, j])
+                    delta = max(delta, np.abs(v - self.V[i, j]))
+                to_draw_something(self.V)
+                print(delta)
             if delta < 1e-6:
                 return
 
         value_s_prime = get_center_of_mass()
-        print(f"reward: {value_s_prime-value_s}")
+        print(f"reward: {value_s_prime - value_s}")
         # print(self.get_center_of_mass())
         # print(f"sum after renting: {A_prime.sum()}")
-
