@@ -35,18 +35,22 @@ class Jcr:
         self.rental_reward_A = 10
         self.rental_reward_B = 10
         self.cost_move = -2
-        self.rental_request_rate_A = 2  # orig: 3
-        self.rental_request_rate_B = 2  # orig: 4
+        self.request_rate_A = 2  # orig: 3
+        self.request_rate_B = 2  # orig: 4
         self.return_rate_A = 0.00001  # orig: 3
         self.return_rate_B = 1  # orig: 2
         self.max_cap_A = 20
         self.max_cap_B = 20
         self.max_move = 5
         # calculate rental and return prob distribution once
-        self.rental_request_probs_A = hm.poisson(self.rental_request_rate_A, self.max_cap_A + 1)
-        self.rental_request_probs_B = hm.poisson(self.rental_request_rate_B, self.max_cap_B + 1)
-        self.rental_return_probs_A = hm.poisson(self.return_rate_A, self.max_cap_A + 1)
-        self.rental_return_probs_B = hm.poisson(self.return_rate_B, self.max_cap_B + 1)
+        self.rental_dict_a = hm.get_wall_vec_dict(self.request_rate_A, self.max_cap_A + 1)
+        self.rental_dict_b = hm.get_wall_vec_dict(self.request_rate_B, self.max_cap_B + 1)
+
+        self.return_dict_a = hm.get_wall_vec_dict(self.return_rate_A, self.max_cap_A + 1)
+        print("asdasdasd", self.return_dict_a[0].shape, self.return_dict_a[1].shape, self.return_dict_a[20].shape)
+        self.return_dict_b = hm.get_wall_vec_dict(self.return_rate_B, self.max_cap_B + 1)
+
+        self.index_dict = hm.get_index_vec_dict(max(self.max_cap_A, self.max_cap_B)+1)
         # S of the game defined as matrix of probabilities [cars_at_A, cars_at_B], probability)
         if init_S:
             self.S = init_S
@@ -71,10 +75,10 @@ class Jcr:
         plt.show()
 
     def rent_cars(self, i, j):
-        walled_a = hm.wall_vector(self.rental_request_probs_A, i + 1)
-        walled_b = hm.wall_vector(self.rental_request_probs_B, j + 1)
-        reward = (self.rental_reward_A * np.sum(np.arange(len(walled_a)) * walled_a) +
-                  self.rental_reward_B * np.sum(np.arange(len(walled_b)) * walled_b))
+        walled_a = self.rental_dict_a[i]
+        walled_b = self.return_dict_b[j]
+        reward = (self.rental_reward_A * np.sum(self.index_dict[i] * walled_a) +
+                  self.rental_reward_B * np.sum(self.index_dict[j] * walled_b))
         # get probabilities of going somewhere
         p_a = np.flip(walled_a).reshape(-1, 1)
         p_b = np.flip(walled_b).reshape(1, -1)
@@ -87,8 +91,9 @@ class Jcr:
         S_after_return = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
         for i in range(A.shape[0]):
             for j in range(A.shape[1]):
-                walled_a = hm.wall_vector(self.rental_return_probs_A, A.shape[0] - i)
-                walled_b = hm.wall_vector(self.rental_return_probs_B, A.shape[1] - j)
+                walled_a = self.return_dict_b[A.shape[0] - i -1]
+                walled_b = self.return_dict_b[A.shape[1] - j -1]
+                # print((A.shape[0]-i-1, A.shape[1]-i-1), (i, j), (walled_a.shape, walled_b.shape), S_after_return[i:, j:].shape)
                 S_after_return[i:, j:] += A[i, j] * (walled_a.reshape(-1, 1) @ walled_b.reshape(1, -1))
         return S_after_return
 
@@ -139,7 +144,6 @@ class Jcr:
         sweep = 0
         while True:
             delta = 0
-            print(f"delta: {delta}")
             for i in range(self.S.shape[0]):
                 for j in range(self.S.shape[1]):
                     v = self.V[i, j]
@@ -155,10 +159,12 @@ class Jcr:
                     # print(i,j, reward, self.V[i, j])
                     delta = max(delta, np.abs(v - self.V[i, j]))
                     # logging.info(delta)
+
             logging.info(f"sweep: \t {sweep} \t delta: {delta}")
-            print('*', end='')
+            # to_draw_something(self.V)
+            print(f"delta: {delta}")
             sweep += 1
-            if delta < 6:
+            if delta < 1e-2:
                 to_draw_something(self.V)
                 quit(0)
 
