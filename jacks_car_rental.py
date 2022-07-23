@@ -5,135 +5,178 @@ import seaborn as sns
 import logging
 import helper_math as hm
 
-logging.basicConfig(filename='jcr_app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(filename='jcr_app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+
+
+def get_center_of_mass(A):
+    """
+    returns the x,y position where the distribution would be in balance when sticking on a needle
+    """
+    mass_x = 0
+    mass_y = 0
+    dim_x, dim_y = A.shape
+    for i in range(dim_x):
+        for j in range(dim_y):
+            mass_x += A[i, j] * i
+            mass_y += A[i, j] * j
+    return np.array([mass_x, mass_y])
+
+
+def to_draw_something(A, title="draw", print_center_of_mass=False):
+    sns.heatmap(A, square=True, linewidths=.01)
+    # cbar_kws={"shrink": .5})
+    # mask=mask, cmap=cmap, vmax=.3, center=0,
+    if print_center_of_mass:
+        plt.title(f"{title} com: {get_center_of_mass(A)}")
+    else:
+        plt.title(f"{title}")
+    plt.show()
+
+
+def get_s_prime(a, b):
+    return a.reshape(-1, 1) @ b.reshape(1, -1)
 
 
 class Jcr:
-    def __init__(self, init_S=None):
+    def __init__(self):
+        logging.info(f"initializing class")
         # consts
         self.gamma = 0.9
-        self.rental_reward_A = 10 # negative cost means profit
-        self.rental_reward_B = 10 # negative cost means profit
-        self.cost_move = -2
-        self.rental_request_rate_A = 3  # orig: 3
-        self.rental_request_rate_B = 4  # orig: 4
-        self.return_rate_A = 1  # orig: 3
-        self.return_rate_B = 1  # orig: 2
-        self.max_cap_A = 20
-        self.max_cap_B = 20
+        self.theta = 1e-5
+        self.rental_reward = {'A': 10, 'B': 10}
+        self.request_rate = {'A': 3, 'B': 4}  # orig: 3/4
+        self.return_rate = {'A': 3, 'B': 2}  # orig: 3/2
+        self.max_cap = {'A': 20, 'B': 20}
         self.max_move = 5
+        self.cost_move = 2
+        self.S = np.zeros((self.max_cap['A'], self.max_cap['B']))
         # calculate rental and return prob distribution once
-        self.rental_request_probs_A = hm.poisson(self.rental_request_rate_A, self.max_cap_A+1)
-        self.rental_request_probs_B = hm.poisson(self.rental_request_rate_B, self.max_cap_B+1)
-        self.rental_return_probs_A = hm.poisson(self.return_rate_A, self.max_cap_A+1)
-        self.rental_return_probs_B = hm.poisson(self.return_rate_B, self.max_cap_B+1)
+        self.rental_dict = {'A': hm.get_wall_vec_dict(self.request_rate['A'], self.max_cap['A'] + 1, trunc_margins=False),
+                            'B': hm.get_wall_vec_dict(self.request_rate['B'], self.max_cap['B'] + 1, trunc_margins=False)}
+        self.return_dict = {'A': hm.get_wall_vec_dict(self.return_rate['A'], self.max_cap['A'] + 1, trunc_margins=False),
+                            'B': hm.get_wall_vec_dict(self.return_rate['B'], self.max_cap['B'] + 1, trunc_margins=False)}
+        self.index_dict = hm.get_index_vec_dict(max(self.max_cap['A'], self.max_cap['B']) + 1)
         # S of the game defined as matrix of probabilities [cars_at_A, cars_at_B], probability)
-        if init_S:
-            self.S = init_S
-        else:
-            self.S = self.init_zero_S()
-        self.S_prime = self.init_zero_S()
-        self.V = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
-        self.P = np.zeros((self.max_cap_A+1, self.max_cap_B+1), dtype=numpy.int)-10
+        self.V = np.zeros((self.max_cap['A'] + 1, self.max_cap['B'] + 1))
+        self.P = np.zeros((self.max_cap['A'] + 1, self.max_cap['B'] + 1), dtype=numpy.int)
+        self.check_init_policies()
 
-    def init_zero_S(self):
-        return np.zeros((self.max_cap_A+1, self.max_cap_B+1))
+    def check_init_policies(self):
+        for i in range(self.P.shape[0]):
+            for j in range(self.P.shape[1]):
+                assert self.is_feasible_action(i, j, self.P[i, j]), f"action not feasible: {i, j, self.P[i, j]}"
 
-    def to_draw(self):
-        sns.heatmap(self.S)
-        plt.show()
+    def apply_action(self, i, j, a):
+        cost = self.cost_move * np.abs(a)
+        return i - a, j + a, cost
 
-    def to_draw_something(self, A):
-        sns.heatmap(A)
-        plt.show()
+    def apply_policy(self, i, j):
+        a = self.P[i, j]
+        cost = self.cost_move * a
+        return i - a, j + a, cost
 
-    def get_center_of_mass(self):
-        """
-        returns the x,y position where the distribution would be in balance when sticking on a needle
-        """
-        mass_x = 0
-        mass_y = 0
-        dim_x, dim_y = self.S.shape
-        for i in range(dim_x):
-            for j in range(dim_y):
-                mass_x += self.S[i, j] * i
-                mass_y += self.S[i, j] * j
-        return np.array([mass_x, mass_y])
+    def rent_cars1D(self, dim, i):
+        walled = self.rental_dict[dim][i]
+        reward = self.rental_reward[dim] * np.sum(self.index_dict[i] * walled)
+        return walled, reward
 
     def rent_cars(self, i, j):
-        walled_a = hm.wall_vector(self.rental_request_probs_A, i + 1)
-        print(walled_a)
-        walled_b = hm.wall_vector(self.rental_request_probs_B, j + 1)
-        reward = (self.rental_reward_A*np.sum(np.arange(len(walled_a))*walled_a) +
-                self.rental_reward_B*np.sum(np.arange(len(walled_b))*walled_b))
-        # get probabilities of going somewhere
-        p_a = np.flip(walled_a).reshape(-1, 1)
-        p_b = np.flip(walled_b).reshape(1, -1)
-        # print("coord: ", i, j, "probs: ", p_i, p_j, "matrix affected: \n", A_to_be_altered)
-        S_after_rent = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
-        S_after_rent[0:(i + 1), 0:(j + 1)] += (p_a @ p_b).T
-        return S_after_rent, reward
+        rented_a, reward_a = self.rent_cars1D('A', i)
+        rented_b, reward_b = self.rent_cars1D('B', j)
+        return np.flip(rented_a), np.flip(rented_b), reward_a + reward_b
 
-    def return_cars(self, A):
-        S_after_return = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
-        for i in range(A.shape[0]):
-            for j in range(A.shape[1]):
-                walled_a = hm.wall_vector(self.rental_return_probs_A, A.shape[0] - i)
-                walled_b = hm.wall_vector(self.rental_return_probs_B, A.shape[1] - j)
-                S_after_return[i:,j:] += A[i,j]*(walled_a.reshape(-1,1)@walled_b.reshape(1,-1))
+    def return_cars1D(self, dim, vec):
+        res = np.zeros(self.max_cap[dim] + 1)
+        for i, v in enumerate(vec):
+            res[i:] += v * self.return_dict[dim][self.max_cap[dim] - i]
+        return res
 
-        return S_after_return
-
-    def apply_policy(self, A):
-        S_after_policy = np.zeros((self.max_cap_A+1, self.max_cap_B+1))
-        print(f"shape of S_after_policy:  {S_after_policy.shape}")
-
-        for i in range(A.shape[0]):
-            for j in range(A.shape[1]):
-                p = self.P[i,j]
-                # p might be positive or negative
-                # check that i+p doesnt exceed 20 or gets below 0
-                print(f"policy for coord {i,j} is {p}")
-                print(f"the shape of input matrix: {A.shape}")
-                print(f"i+p= {i+p}")
-                print(f"j-p= {j-p}")
-                print(f"{min(i+p, A.shape[0]-1)}")
-                print(f"{max(j-p, 0)}")
-
-                # print(i + p, A.shape[0], np.min(i+p, A.shape[0]))
-                # print(i - p, 0, np.min(i-p, 0))
-                if p >= 0:
-                    S_after_policy[min(i+p, A.shape[0]-1), max(j-p, 0)] += A[i, j]
-                else:
-                    S_after_policy[max(i+p, 0), min(j-p, A.shape[1]-1)] += A[i, j]
-        return S_after_policy
-
-
+    def return_cars(self, a, b):
+        returned_a = self.return_cars1D('A', a)
+        returned_b = self.return_cars1D('B', b)
+        return returned_a, returned_b
 
     def policy_evaluation(self):
-        """
-        go trough S and apply the rental poisson. as we can not rent out more than we have, the wall_vector
-        function will limit the requests exceeding the stock to the stock available.
-        the parking can at max be empty, not negative
-        :return:
-        """
         print(f"called policy evaluation")
         # value_s = self.get_center_of_mass()
-        assert self.S.shape == (self.max_cap_A+1, self.max_cap_B+1)
-        delta = 0
+        assert self.V.shape == (self.max_cap['A'] + 1, self.max_cap['B'] + 1)
+        # to_draw_something(self.V)
+        sweep = 0
         while True:
-            for i in range(self.S.shape[0]):
-                for j in range(self.S.shape[1]):
-                    v = self.V[i,j]
-                    S_after_rent, reward = self.rent_cars(i, j)
-                    S_after_return = self.return_cars(S_after_rent)
-                    self.V[i,j] = reward + self.gamma*np.multiply(S_after_return, self.V)
-                    delta = np.max(delta, np.abs(v-self.V[i, j]))
-            if delta < 1e-6:
+            delta = 0
+            for i in range(self.V.shape[0]):
+                for j in range(self.V.shape[1]):
+                    v = self.V[i, j]
+                    i_moved, j_moved, cost = self.apply_policy(i, j)
+                    rented_a, rented_b, reward = self.rent_cars(i_moved, j_moved)
+                    returned_a, returned_b = self.return_cars(rented_a, rented_b)
+                    self.V[i, j] = (reward - cost
+                                    + self.gamma *
+                                    np.sum(np.multiply(get_s_prime(returned_a, returned_b), self.V)))
+                    delta = max(delta, np.abs(v - self.V[i, j]))
+
+            logging.info(f"sweep: {sweep}, delta: {delta}")
+            # to_draw_something(self.V)
+            if delta < self.theta:
+                print(f"sweep: {sweep}; delta: {delta}")
+                # to_draw_something(self.V)
                 return
+            sweep += 1
 
-        value_s_prime = self.get_center_of_mass()
-        print(f"reward: {value_s_prime-value_s}")
-        # print(self.get_center_of_mass())
-        # print(f"sum after renting: {A_prime.sum()}")
+    def policy_improvement(self):
+        print(f"called policy improvement")
+        policy_stable = True
+        for i in range(self.P.shape[0]):
+            for j in range(self.P.shape[1]):
+                old_action = self.P[i, j]
+                possible_actions = self.get_feasible_actions(i, j)
+                action_values = np.zeros(len(possible_actions))
+                for a_index, a in enumerate(possible_actions):
+                    i_moved, j_moved, cost = self.apply_action(i, j, a)
+                    rented_a, rented_b, reward = self.rent_cars(i_moved, j_moved)
+                    returned_a, returned_b = self.return_cars(rented_a, rented_b)
+                    action_values[a_index] = (reward - cost
+                                              + self.gamma * np.sum(np.multiply(get_s_prime(returned_a, returned_b), self.V)))
+                best_action = possible_actions[np.argmax(action_values)]
+                self.P[i, j] = best_action
+                if old_action != best_action:
+                    policy_stable = False
+        to_draw_something(self.P)
+        if policy_stable:
+            print(f" policy is stable!!!")
+            print(np.amin(self.V), np.amax(self.V))
+            return True
+        else:
+            return False
 
+    def get_feasible_actions(self, i, j):
+        a = self.max_move
+        # we compare the
+        vec1 = np.array([a, a, a])
+        vec2 = np.array([i, self.max_cap['B'] - j, self.max_move])
+        a_max = np.min(np.minimum(vec1, vec2))
+        a = -self.max_move
+        vec1 = np.array([-a, -a, -a])
+        vec2 = np.array([j, self.max_cap['A'] - i, self.max_move])
+        a_min = -np.min(np.minimum(vec1, vec2))
+        return np.arange(a_min, a_max + 1)
+
+    def is_feasible_action(self, i, j, a):
+        if np.abs(a) > self.max_move:
+            return False
+        if i - a < 0 or i - a > self.max_cap['A']:
+            return False
+        if j + a < 0 or j + a > self.max_cap['B']:
+            return False
+        return True
+
+    def get_feasible_actions_old(self, i, j):
+        # min_action = self.is_feasible_action2(i, j, -20)
+        # max_action = self.is_feasible_action2(i, j, 20)
+        # return min_action, max_action+1
+        feasible_actions = []
+        for a in np.arange(-self.max_move, self.max_move + 1):
+            if self.is_feasible_action(i, j, a):
+                feasible_actions.append(a)
+        return feasible_actions
