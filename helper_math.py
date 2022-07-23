@@ -75,7 +75,7 @@ def wall_vector(vec, n, margin_treatment):
 
         # assert np.isclose(sum(vec), np.sum(walled_vec), 1e-7), f"vec and walled vec sum is not the same: {np.sum(vec)} {np.sum(walled_vec)} {vec} {walled_vec}"
 
-def get_wall_vec_dict(lambd, n_max, margin_treatment='sum_margin'):
+def get_wall_vec_dict(lambd, n_max, margin_treatment='sum'):
     p = poisson(lambd, n_max)
     res_dict = dict()
     res_dict[0] = np.array([1])
