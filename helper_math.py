@@ -58,7 +58,7 @@ def get_index_vec_dict(n):
     return res_dict
 
 
-def wall_vector(vec, n):
+def wall_vector(vec, n, trunc_margins):
     """
     when a vector of length e.g. 10 is passed and n is 5, the elements 6:10 will be added to element 5
     the returning vec has length 5
@@ -68,19 +68,21 @@ def wall_vector(vec, n):
     """
     # assert n > 0, "walled vec must have len > 0"
     # assert n <= len(vec), f"walled vec of len {n} must be smaller than original vector of {len(vec)}"
-    walled_vec = np.zeros(n)
-    walled_vec[0:n-1] = vec[0:n-1]
-    walled_vec[-1] = np.sum(vec[n-1:])
-    # assert np.isclose(sum(vec), np.sum(walled_vec), 1e-7), f"vec and walled vec sum is not the same: {np.sum(vec)} {np.sum(walled_vec)} {vec} {walled_vec}"
-    return walled_vec
+    if trunc_margins:
+        return vec[0:n].copy()
+    else:
+        walled_vec = np.zeros(n)
+        walled_vec[0:n-1] = vec[0:n-1]
+        walled_vec[-1] = np.sum(vec[n-1:])
+        # assert np.isclose(sum(vec), np.sum(walled_vec), 1e-7), f"vec and walled vec sum is not the same: {np.sum(vec)} {np.sum(walled_vec)} {vec} {walled_vec}"
+        return walled_vec
 
-
-def get_wall_vec_dict(lambd, n_max):
+def get_wall_vec_dict(lambd, n_max, trunc_margins=False):
     p = poisson(lambd, n_max)
     res_dict = dict()
-    res_dict[0] = np.array([0])
+    res_dict[0] = np.array([1])
     for n in range(1, n_max):
-        res_dict[n] = wall_vector(p, n + 1)
+        res_dict[n] = wall_vector(p, n + 1, trunc_margins)
     # print(f"len of dict with {lambd, n_max}: {len(res_dict)}")
     return res_dict
 
