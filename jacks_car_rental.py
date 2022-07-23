@@ -23,14 +23,12 @@ def get_center_of_mass(A):
     return np.array([mass_x, mass_y])
 
 
-def to_draw_something(A, title="draw", print_center_of_mass=False):
-    sns.heatmap(A, square=True, linewidths=.01)
+def to_draw_something(A, title="draw", annot=True):
+    ax = sns.heatmap(A, square=True, linewidths=.01, annot=annot)
+    ax.invert_yaxis()
     # cbar_kws={"shrink": .5})
     # mask=mask, cmap=cmap, vmax=.3, center=0,
-    if print_center_of_mass:
-        plt.title(f"{title} com: {get_center_of_mass(A)}")
-    else:
-        plt.title(f"{title}")
+    plt.title(f"{title}")
     plt.show()
 
 
@@ -43,7 +41,7 @@ class Jcr:
         logging.info(f"initializing class")
         # consts
         self.gamma = 0.9
-        self.theta = 1e-5
+        self.theta = 1e-6
         self.rental_reward = {'A': 10, 'B': 10}
         self.request_rate = {'A': 3, 'B': 4}  # orig: 3/4
         self.return_rate = {'A': 3, 'B': 2}  # orig: 3/2
@@ -52,10 +50,11 @@ class Jcr:
         self.cost_move = 2
         self.S = np.zeros((self.max_cap['A'], self.max_cap['B']))
         # calculate rental and return prob distribution once
-        self.rental_dict = {'A': hm.get_wall_vec_dict(self.request_rate['A'], self.max_cap['A'] + 1, trunc_margins=False),
-                            'B': hm.get_wall_vec_dict(self.request_rate['B'], self.max_cap['B'] + 1, trunc_margins=False)}
-        self.return_dict = {'A': hm.get_wall_vec_dict(self.return_rate['A'], self.max_cap['A'] + 1, trunc_margins=False),
-                            'B': hm.get_wall_vec_dict(self.return_rate['B'], self.max_cap['B'] + 1, trunc_margins=False)}
+        margin_treatment = 'rescale'
+        self.rental_dict = {'A': hm.get_wall_vec_dict(self.request_rate['A'], self.max_cap['A'] + 1, margin_treatment=margin_treatment),
+                            'B': hm.get_wall_vec_dict(self.request_rate['B'], self.max_cap['B'] + 1, margin_treatment=margin_treatment)}
+        self.return_dict = {'A': hm.get_wall_vec_dict(self.return_rate['A'], self.max_cap['A'] + 1, margin_treatment='sum'),
+                            'B': hm.get_wall_vec_dict(self.return_rate['B'], self.max_cap['B'] + 1, margin_treatment='sum')}
         self.index_dict = hm.get_index_vec_dict(max(self.max_cap['A'], self.max_cap['B']) + 1)
         # S of the game defined as matrix of probabilities [cars_at_A, cars_at_B], probability)
         self.V = np.zeros((self.max_cap['A'] + 1, self.max_cap['B'] + 1))
@@ -142,7 +141,7 @@ class Jcr:
                 self.P[i, j] = best_action
                 if old_action != best_action:
                     policy_stable = False
-        to_draw_something(self.P)
+        # to_draw_something(self.P)
         if policy_stable:
             print(f" policy is stable!!!")
             print(np.amin(self.V), np.amax(self.V))
