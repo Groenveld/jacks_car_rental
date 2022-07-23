@@ -15,32 +15,15 @@ theta = 1e-4
 #
 
 if __name__ == '__main__':
-    j = jcr.Jcr()
+    jack = jcr.Jcr()
 
-    print("INIT")
-    j.S[18, 18] = 1.0
-    print(f"center of mass after init: {jcr.get_center_of_mass(j.S)}")
-
-    for i in range(1):
+    for i in range(0):
         # jcr.to_draw_something(j.V)
-        j.policy_evaluation()
+        jack.policy_evaluation()
         # jcr.to_draw_something(j.V)
         print(f"center of mass after policy evaluation: {jcr.get_center_of_mass(j.S)}")
-    quit()
+    # quit()
 
-    for i in range(1):
-        j.to_draw()
-        A, reward = j.rent_cars(18,18)
-        print(f"center of mass after renting: {jcr.get_center_of_mass(A)}")
-        jcr.to_draw_something(A)
-        print(f"the reward is: {reward}")
-        B = j.return_cars(A)
-        print(f"center of mass after returning: {jcr.get_center_of_mass(B)}")
-        jcr.to_draw_something(B)
-        C = j.apply_policy(B)
-        print(f"center of mass after policy: {jcr.get_center_of_mass(C)}")
-        jcr.to_draw_something(C)
-        jcr.to_draw_something(j.V)
 
 
     quit()
@@ -84,7 +67,7 @@ if __name__ == '__main__':
                 for coord, prob in state_primes.items():
                     new_contribution = prob*gamma*V[coord[0], coord[1]]
                     if (i == 20) & (j == 20):
-                       new_contribution_sum += new_contribution
+                        new_contribution_sum += new_contribution
                     V_prime[i, j] += new_contribution
                 if (i == 20) & (j == 20):
                     print(f"new_contribution_sum: {new_contribution_sum}")

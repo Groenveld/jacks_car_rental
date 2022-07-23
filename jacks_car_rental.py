@@ -22,8 +22,14 @@ def get_center_of_mass(A):
     return np.array([mass_x, mass_y])
 
 
-def to_draw_something(A):
-    sns.heatmap(A)
+def to_draw_something(A, title="draw", print_center_of_mass=True):
+    g = sns.heatmap(A,
+                # mask=mask, cmap=cmap, vmax=.3, center=0,
+                square=True, linewidths=.01) #, cbar_kws={"shrink": .5})
+    if print_center_of_mass:
+        plt.title(f"{title} com: {get_center_of_mass(A)}")
+    else:
+        plt.title(f"{title}")
     plt.show()
 
 
@@ -34,11 +40,11 @@ class Jcr:
         self.gamma = 0.9
         self.rental_reward_A = 10
         self.rental_reward_B = 10
-        self.cost_move = -2
-        self.request_rate_A = 2  # orig: 3
-        self.request_rate_B = 2  # orig: 4
-        self.return_rate_A = 0.00001  # orig: 3
-        self.return_rate_B = 1  # orig: 2
+        self.cost_move = 2
+        self.request_rate_A = 3  # orig: 3
+        self.request_rate_B = 4  # orig: 4
+        self.return_rate_A = 3  # orig: 3
+        self.return_rate_B = 2  # orig: 2
         self.max_cap_A = 20
         self.max_cap_B = 20
         self.max_move = 5
@@ -47,7 +53,6 @@ class Jcr:
         self.rental_dict_b = hm.get_wall_vec_dict(self.request_rate_B, self.max_cap_B + 1)
 
         self.return_dict_a = hm.get_wall_vec_dict(self.return_rate_A, self.max_cap_A + 1)
-        print("asdasdasd", self.return_dict_a[0].shape, self.return_dict_a[1].shape, self.return_dict_a[20].shape)
         self.return_dict_b = hm.get_wall_vec_dict(self.return_rate_B, self.max_cap_B + 1)
 
         self.index_dict = hm.get_index_vec_dict(max(self.max_cap_A, self.max_cap_B)+1)
@@ -91,7 +96,7 @@ class Jcr:
         S_after_return = np.zeros((self.max_cap_A + 1, self.max_cap_B + 1))
         for i in range(A.shape[0]):
             for j in range(A.shape[1]):
-                walled_a = self.return_dict_b[A.shape[0] - i -1]
+                walled_a = self.return_dict_a[A.shape[0] - i -1]
                 walled_b = self.return_dict_b[A.shape[1] - j -1]
                 # print((A.shape[0]-i-1, A.shape[1]-i-1), (i, j), (walled_a.shape, walled_b.shape), S_after_return[i:, j:].shape)
                 S_after_return[i:, j:] += A[i, j] * (walled_a.reshape(-1, 1) @ walled_b.reshape(1, -1))
@@ -160,7 +165,7 @@ class Jcr:
                     delta = max(delta, np.abs(v - self.V[i, j]))
                     # logging.info(delta)
 
-            logging.info(f"sweep: \t {sweep} \t delta: {delta}")
+            logging.info(f"sweep: {sweep}, delta: {delta}")
             # to_draw_something(self.V)
             print(f"delta: {delta}")
             sweep += 1
