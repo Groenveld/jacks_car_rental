@@ -1,9 +1,9 @@
 import jacks_car_rental as jcr
 
 jack = jcr.Jcr()
-s, t = 14, 14
+s, t = 1, 3
 jack.S[s, t] = 1.0
-jack.P[s, t] = 2
+jack.P[s, t] = 1
 jcr.to_draw_something(jack.S, 'init')
 i_moved, j_moved, cost = jack.apply_policy(s, t)
 jack2 = jcr.Jcr()

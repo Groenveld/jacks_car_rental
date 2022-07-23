@@ -169,6 +169,7 @@ class Jcr:
             # to_draw_something(self.V)
             print(f"delta: {delta}")
             sweep += 1
+            to_draw_something((self.V))
             if delta < 1e-2:
                 to_draw_something(self.V)
                 quit(0)
