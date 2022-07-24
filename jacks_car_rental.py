@@ -29,6 +29,8 @@ def to_draw_something(A, title="draw", annot=True):
     # cbar_kws={"shrink": .5})
     # mask=mask, cmap=cmap, vmax=.3, center=0,
     plt.title(f"{title}")
+    plt.xlabel('# of cars at B')
+    plt.ylabel('# of cars at A')
     plt.show()
 
 
@@ -48,6 +50,7 @@ class Jcr:
         self.max_cap = {'A': 20, 'B': 20}
         self.max_move = 5
         self.cost_move = 2
+        self.cost_park = 4
         self.S = np.zeros((self.max_cap['A'], self.max_cap['B']))
         # calculate rental and return prob distribution once
         margin_treatment = 'rescale'
@@ -65,10 +68,18 @@ class Jcr:
         for i in range(self.P.shape[0]):
             for j in range(self.P.shape[1]):
                 assert self.is_feasible_action(i, j, self.P[i, j]), f"action not feasible: {i, j, self.P[i, j]}"
+    def get_cost(self, i, j, a):
+        if a > 0:
+            cost_move = self.cost_move * (a-1)
+        else:
+            cost_move = self.cost_move * (-a)
+        cost_park = self.cost_park*((i > 10)+(j > 10))
+        return cost_move + cost_park
 
     def apply_action(self, i, j, a):
-        cost = self.cost_move * np.abs(a)
-        return i - a, j + a, cost
+        new_i = i - a
+        new_j = j + a
+        return new_i, new_j, self.get_cost(new_i, new_j, a)
 
     def apply_policy(self, i, j):
         a = self.P[i, j]
